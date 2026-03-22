@@ -64,7 +64,7 @@
 		let base2_list = [];
 		let letter_b2 = ""
 		while (i < string.length) {
-			letter_num = B32_ALPHABET.indexOf(string[i]);
+			letter_num = B32_ALPHABET.indexOf(string[i].toUpperCase());
 			letter_b2 = String(letter_num.toString(2));
 			while (letter_b2.length != 5) {
 				letter_b2 = "0" + letter_b2;
@@ -81,7 +81,7 @@
 	
 	function TimeToByte(number) {
 		let base2_list = []
-		let numstring = String(number.toString(16)); // convert time to hex
+		let numstring = number.toString(16).padStart(16, '0'); // convert time to hex
 		while (numstring.length < 16) { // padding
 			numstring = "0" + numstring
 		};
@@ -150,19 +150,19 @@
 			["sign"] // usage (sign the time)
 		);
 		let hmacResult = await window.crypto.subtle.sign(
- //sign the time
-			"HMAC",
+ 			//sign the time
+			{ name: "HMAC" },
 			cryptoKey,
 			time_u8array
+		);
 		
-);
 		let hmacBytes = new Uint8Array(hmacResult);
 		let offset = hmacBytes[19] & 0xf;
 		let b1 = (hmacBytes[offset] & 0x7f) << 24;
 		let b2 = (hmacBytes[offset + 1] & 0xff) << 16;
 		let b3 = (hmacBytes[offset + 2] & 0xff) << 8;
 		let b4 = (hmacBytes[offset + 3] & 0xff);
-		let authcode = (b1 + b2 + b3 + b4) % 1000000;
+		let authcode = (b1 | b2 | b3 | b4) % 1000000;
 		document.getElementById("code").innerText = String(authcode).padStart(6, "0");
 	};
 	
