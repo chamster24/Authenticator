@@ -16,7 +16,7 @@
 
 	<label for="AuthenticatorForm_Uri">OTPAuth URI: </label><input type="text" id="AuthenticatorForm_Uri" name="AuthenticatorForm_Uri" spellcheck="false" autocomplete="off" placeholder="otpauth://totp/GitHub:johndoe?secret=JBSWY3DPEHPK3PXP&issuer=GitHub">
 
-	<br><label for="AuthenticatorForm_Secret">Secret Key: </label><input type="text" id="AuthenticatorForm_Secret" name="AuthenticatorForm_Secret" spellcheck="false" autocomplete="off" pattern="[a-zA-Z2-7]+" placeholder="JBSWY3DPEHPK3PXP">
+	<br><label for="AuthenticatorForm_Secret">Secret Key: </label><input type="text" id="AuthenticatorForm_Secret" name="AuthenticatorForm_Secret" spellcheck="false" autocomplete="off" pattern="[a-zA-Z2-7\s]+" placeholder="JBSWY3DPEHPK3PXP">
 
 	<br><label for="AuthenticatorForm_Cache">Cache this OTPAuth URI/Secret Key: </label><input type="checkbox" id="AuthenticatorForm_Cache" name="AuthenticatorForm_Cache">
 
