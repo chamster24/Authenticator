@@ -16,17 +16,28 @@
 
 	<label for="AuthenticatorForm_Uri">OTPAuth URI: </label><input type="text" id="AuthenticatorForm_Uri" name="AuthenticatorForm_Uri" spellcheck="false" autocomplete="off" placeholder="otpauth://totp/GitHub:johndoe?secret=JBSWY3DPEHPK3PXP&issuer=GitHub">
 
-	<br><label for="AuthenticatorForm_Secret">Secret Key: </label><input type="text" id="AuthenticatorForm_Secret" name="AuthenticatorForm_Secret" spellcheck="false" autocomplete="off" pattern="[a-zA-Z2-7\s]+" placeholder="JBSWY3DPEHPK3PXP">
+	<br><label for="AuthenticatorForm_Secret">Secret Key: </label><input type="text" id="AuthenticatorForm_Secret" name="AuthenticatorForm_Secret" spellcheck="false" autocomplete="off" pattern="[a-zA-Z2-7\s\-]+" placeholder="JBSWY3DPEHPK3PXP">
+		
+	<br><label for="AuthenticatorForm_Name">Name: </label><input type="text" id="AuthenticatorForm_Name" name="AuthenticatorForm_Name" spellcheck="false" autocomplete="off" placeholder="Github">
 
-	<br><label for="AuthenticatorForm_Cache">Cache this OTPAuth URI/Secret Key: </label><input type="checkbox" id="AuthenticatorForm_Cache" name="AuthenticatorForm_Cache">
+	<br><label for="HashMethod">2FA Method/Hashing Algorithm: </label><input list="HashMethod" id="AuthenticatorForm_Hash" placeholder="TOTP - SHA-1">     <label for="AuthenticatorForm_Cache">Cache this Key: </label><input type="checkbox" id="AuthenticatorForm_Cache" name="AuthenticatorForm_Cache">
 
+	<datalist id="HashMethod">
+		<option value="TOTP - SHA-1">
+		<option value="NOTE: RIGHT NOW SELECTING ON ANY OPTION WILL GIVE YOU SHA-1 HASHING ONLY">
+		<option value="TOTP - SHA-256 (Unsupported)">
+		<option value="TOTP - SHA-512 (Unsupported)">
+		<option value="HOTP (Unsupported)">
+		<option value="OCRA (Unsupported)">
+	</datalist>
+		
 	<br><button type="submit" onclick="AddSecret()">Submit</button>
 
 	</form>
 	
 	<!-- ADD SPACE FOR MULTIPLE CODES LATER ON -->
 	<br><br><div id="AuthenticatorCodeArea"><p><i>Your Current Authenicator Code:</i></p>
-	<h2 id="code" style="text-align: center;">######</h3>
+	<h2 id="code" class="authcode" style="text-align: center; cursor: pointer;" title="Click to Copy">######</h2>
 	<h3 style="text-align: center;">Time Left: <span id="timeleft">##</span>/30 seconds</h3>
 	</div>
 
@@ -37,6 +48,7 @@
 
 <script>
 	// GLOBAL VARs
+	const authcodes = document.querySelectorAll('.authcode');
 	let secret_b2list = [];
 	let time_b2list = [];
 	let timewindow = 30; //add option to change timewindow second amount
@@ -92,7 +104,7 @@
 		let secret = ""
 		
 		if (document.getElementById("AuthenticatorForm_Secret").value) { // prio the secret
-			secret = document.getElementById("AuthenticatorForm_Secret").value.toUpperCase().replace(/\s/g, "");
+			secret = document.getElementById("AuthenticatorForm_Secret").value.toUpperCase().replace(/[\s-]/g, "");
 			secret = secret.replace(/=/g, "");
 
 		} else if (document.getElementById("AuthenticatorForm_Uri").value) { // uri as backup
@@ -145,18 +157,16 @@
 		
 );
 		let hmacBytes = new Uint8Array(hmacResult);
-		
-console.log(hmacBytes);
-		let offset = hmacBytes[19] % 16;
-		let b1 = (hmacBytes[offset] & 0x7f) * 16777216;
-		let b2 = (hmacBytes[offset + 1] & 0xff) * 65536;
-		let b3 = (hmacBytes[offset + 2] & 0xff) * 256;
+		let offset = hmacBytes[19] & 0xf;
+		let b1 = (hmacBytes[offset] & 0x7f) << 24;
+		let b2 = (hmacBytes[offset + 1] & 0xff) << 16;
+		let b3 = (hmacBytes[offset + 2] & 0xff) << 8;
 		let b4 = (hmacBytes[offset + 3] & 0xff);
 		let authcode = (b1 + b2 + b3 + b4) % 1000000;
 		document.getElementById("code").innerText = String(authcode).padStart(6, "0");
 	};
 	
-	async function Heartbeat() {
+	async function Heartbeat(exemption) {
 		let time = Math.floor(Date.now() / 1000);
 		let remainingTime = 30 - (time % 30);
 	
@@ -167,7 +177,7 @@ console.log(hmacBytes);
 			document.getElementById("timeleft").style.color = "#000000";
 		};
 			
-		if ((remainingTime > prevRemainingTime) && (document.getElementById("code").innerText != "######")) { // only activates at the start of the next 30 sec window
+		if (((remainingTime > prevRemainingTime) && (document.getElementById("code").innerText != "######")) || exemption) { // only activates at the start of the next 30 sec window
 			GetCounter();
 			GenerateCode();
 		};
@@ -191,6 +201,24 @@ console.log(hmacBytes);
 		document.getElementById("AuthenticatorForm_Cache").checked = true;
 		AddSecret();
 
+	};
+
+	document.addEventListener('click', function (event) {
+		if (event.target.classList.contains('authcode')) {// COPY AUTHCODE
+        	const element = event.target;
+        	const textToCopy = element.innerText;
+			if (textToCopy === "######" || textToCopy === "Copied!") return; // Don't copy if it's a blank field
+			
+			navigator.clipboard.writeText(textToCopy).then(() => {    	
+				const originalText = textToCopy;
+				element.innerText = "Copied!";
+				element.style.color = "#27ae60";
+				setTimeout(() => {
+					Heartbeat("Copied")
+					element.style.color = "";
+				}, 1000);
+			});
+		};
 	};
 </script>
 </html>
