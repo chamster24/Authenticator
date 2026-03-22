@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Authenticator App</title>
+</head>
+
+<body style="font-family: Helvetica, sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center">
+	<h1>Authenticator App</h1>
+	<h2>Secure Offline Web-based Authenticator App</h2>
+	<p>Feel free to turn off your internet once this page has loaded - you can also download this page and run the .html file offline, with it still working.</p>
+	<br>
+	<h2 style="text-align: center;">Input:</h2>
+
+	<form id="AuthenticatorForm" onsubmit="event.preventDefault();">
+
+	<label for="AuthenticatorForm_Uri">OTPAuth URI: </label><input type="text" id="AuthenticatorForm_Uri" name="AuthenticatorForm_Uri" spellcheck="false" autocomplete="off" placeholder="otpauth://totp/GitHub:johndoe?secret=JBSWY3DPEHPK3PXP&issuer=GitHub">
+
+	<br><label for="AuthenticatorForm_Secret">Secret Key: </label><input type="text" id="AuthenticatorForm_Secret" name="AuthenticatorForm_Secret" spellcheck="false" autocomplete="off" placeholder="JBSWY3DPEHPK3PXP">
+
+	<br><label for="AuthenticatorForm_Cache">Cache this OTPAuth URI/Secret Key: </label><input type="checkbox" id="AuthenticatorForm_Cache" name="AuthenticatorForm_Cache">
+
+	<br><button type="submit" onclick="AddSecret()">Submit</button>
+
+	</form>
+	
+	<!-- ADD SPACE FOR MULTIPLE CODES LATER ON -->
+	<br><br><div id="AuthenticatorCodeArea"><p><i>Your Current Authenicator Code:</i></p>
+	<h2 id="code" style="text-align: center;">######</h3>
+	<h3 style="text-align: center;">Time Left: <span id="timeleft">##</span>/30 seconds</h3>
+	</div>
+</body>
+
+<script>
+	// GLOBAL VARs
+	let secret_b2list = [];
+	let time_b2list = [];
+	let timewindow = 30; //add option to change timewindow second amount
+	let timeron = false;
+	let prevRemainingTime = 0;
+	
+	function SecretToByte(string) { // MAKE SURE THE STRING IS CLEAN;
+		const B32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+		let bits = "";
+		let i = 0;
+		let b2String = "";
+		let letter_num = null;
+		let base2_list = [];
+		let letter_b2 = ""
+		while (i < string.length) {
+			letter_num = B32_ALPHABET.indexOf(string[i]);
+			letter_b2 = String(letter_num.toString(2));
+			while (letter_b2.length != 5) {
+				letter_b2 = "0" + letter_b2;
+			};
+			b2String = b2String + letter_b2;
+			i = i + 1;
+		};
+		while (b2String.length >= 8) {
+			base2_list.push(parseInt(b2String.slice(0, 8), 2));
+			b2String = b2String.slice(8);
+		};
+		return base2_list;
+	};
+	
+	function TimeToByte(number) {
+		let base2_list = []
+		let numstring = String(number.toString(16)); // convert time to hex
+		while (numstring.length < 16) { // padding
+			numstring = "0" + numstring
+		};
+		while (numstring.length >= 2) {
+			base2_list.push(parseInt(numstring.slice(0, 2), 16));
+			numstring = numstring.slice(2);
+		};
+		return base2_list;
+	};
+
+	function GetCounter() {
+		let datefct_time = Date.now(); // get ms time
+		datefct_time = datefct_time / 1000; // get sec time
+		datefct_time = Math.floor(datefct_time / timewindow); // get timewindow window, floor to find the window
+		time_b2list = TimeToByte(datefct_time);
+	}
+
+
+	async function AddSecret() {
+		let secret = ""
+		
+		if (document.getElementById("AuthenticatorForm_Secret").value) { // prio the secret
+			secret = document.getElementById("AuthenticatorForm_Secret").value.toUpperCase().replace(/\s/g, "");
+			secret = secret.replace(/=/g, "");
+
+		} else if (document.getElementById("AuthenticatorForm_Uri").value) { // uri as backup
+			let urisecret = document.getElementById("AuthenticatorForm_Uri").value;
+			
+			if (urisecret.includes("secret=")){ // checks for a parm and then splits it
+				secret = urisecret.split("secret=")[1];
+				secret = secret.split("&")[0];
+				secret = secret.replace(/=/g, "");
+				secret = secret.toUpperCase().replace(/\s/g, "");
+			} else {
+				alert("Error with URI - are you sure it's correct?");
+				return;
+			};
+
+		} else { // neither field filled
+			alert("You need to fill in at least one box!");
+			return;
+		};
+		
+		secret_b2list = SecretToByte(secret);
+		
+		if (document.getElementById("AuthenticatorForm_Cache").checked) { // saves code to localStorage
+    			localStorage.setItem("savedSecret", secret);
+		}
+		
+		// CALL FUNCTIONS
+		GetCounter();
+		GenerateCode();
+
+		StartHeartbeat();
+	};
+
+	async function GenerateCode() {
+		let secret_u8array = new Uint8Array(secret_b2list);
+		let time_u8array = new Uint8Array(time_b2list);
+
+		let cryptoKey = await window.crypto.subtle.importKey(
+			"raw", // input format
+			secret_u8array, // actual secret
+			{name: "HMAC", hash: {name: "SHA-1"}}, // algorithm
+			false, // exportable,
+			["sign"] // usage (sign the time)
+		);
+		let hmacResult = await window.crypto.subtle.sign(
+ //sign the time
+			"HMAC",
+			cryptoKey,
+			time_u8array
+		
+);
+		let hmacBytes = new Uint8Array(hmacResult);
+		
+console.log(hmacBytes);
+		let offset = hmacBytes[19] % 16;
+		let b1 = (hmacBytes[offset] & 0x7f) * 16777216;
+		let b2 = (hmacBytes[offset + 1] & 0xff) * 65536;
+		let b3 = (hmacBytes[offset + 2] & 0xff) * 256;
+		let b4 = (hmacBytes[offset + 3] & 0xff);
+		let authcode = (b1 + b2 + b3 + b4) % 1000000;
+		document.getElementById("code").innerText = String(authcode).padStart(6, "0");
+	};
+	
+	async function Heartbeat() {
+		let time = Math.floor(Date.now() / 1000);
+		let remainingTime = 30 - (time % 30);
+	
+		document.getElementById("timeleft").innerText = String(remainingTime).padStart(2, "0");
+		if (remainingTime <= 5) {
+			document.getElementById("timeleft").style.color = "#FF0000";
+		} else {
+			document.getElementById("timeleft").style.color = "#000000";
+		};
+			
+		if ((remainingTime > prevRemainingTime) && (document.getElementById("code").innerText != "######")) { // only activates at the start of the next 30 sec window
+			GetCounter();
+			GenerateCode();
+		};
+		prevRemainingTime = remainingTime;
+	};
+
+	
+	async function StartHeartbeat() {
+		if (!timeron) {
+			timeron = true;
+			setInterval(Heartbeat, 1000);
+		};
+	};
+	
+	let cachedSecret = localStorage.getItem("savedSecret");
+
+	if (cachedSecret) {
+
+
+		document.getElementById("AuthenticatorForm_Secret").value = cachedSecret;
+		document.getElementById("AuthenticatorForm_Cache").checked = true;
+		AddSecret();
+
+	};
+</script>
+</html>
